@@ -5,5 +5,4 @@
             bindtouchstart="onTouchStart" bindtouchend="onTouchEnd"></canvas>
   </view>
   <view class="hint">SONA™ · Tap to interact · Tilt for tempo</view>
-  <view class="toast {{toast ? 'show' : ''}}">{{toast}}</view>
 </view>

@@ -10,7 +10,7 @@ const LW = 135, LH = 240
 
 // ── palette ──
 const C_BLACK = '#000', C_WHITE = '#fff', C_MAIN = '#5acbff', C_MAIN_LT = '#8edbff',
-      C_MAIN_DK = '#3a9bd0', C_DIM = '#6b6d', C_MUTED = '#adf7', C_GREEN = '#07e0'
+      C_MAIN_DK = '#3a9bd0', C_DIM = '#6b6d', C_MUTED = '#adf7', C_GREEN = '#07e000'
 
 // ── 3×5 pixel font ──
 const PIX = {
@@ -102,6 +102,7 @@ for (let r = 0; r < 8; r++) gSeq.push(new Array(8).fill(false))
 let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
 let gLogoHits = 0, gRainbow = false   // easter egg
 let gShake = 0   // shake → wider wave (NaN-safe, mirrors firmware)
+let gToast = null, gPrev = 'idle'   // canvas pixel toast + composer back target
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -173,8 +174,6 @@ function drawIdle(t) {
   ctx.globalAlpha = 0.28 + 0.42 * a
   drawPixText((LW - pixWidth('Tap to start', 1)) / 2, 210, 1, '#7d8d99', 'Tap to start')
   ctx.globalAlpha = 1
-  // create entry (top-right)
-  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CREATE', '#fff')
   drawRipples(t)
 }
 function drawAurora(t) {
@@ -212,9 +211,33 @@ function drawCapsule(cx, cy, w, h, text, color) {
   roundRectPath(cx, cy, w, h, h / 2); ctx.stroke()
   drawPixText((cx + w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
 }
+// neat square button (small radius) with pixel text — for chrome controls
+function drawBtn(cx, cy, w, h, text, color, active) {
+  ctx.fillStyle = active ? 'rgba(90,203,255,0.22)' : 'rgba(90,203,255,0.10)'
+  roundRectPath(cx, cy, w, h, 3); ctx.fill()
+  ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
+  roundRectPath(cx, cy, w, h, 3); ctx.stroke()
+  drawPixText((cx + w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
+}
+// canvas pixel toast — fades in/out under "TAP TO PLAY", no system font
+function drawToast() {
+  if (!gToast) return
+  const age = (Date.now() - gToast.t0) / 1400
+  if (age >= 1) { gToast = null; return }
+  const a = age < 0.15 ? age / 0.15 : (1 - age) / 0.85
+  const txt = gToast.text
+  const w = pixWidth(txt, 1) + 8
+  ctx.globalAlpha = 0.9 * Math.max(0, Math.min(1, a))
+  ctx.fillStyle = 'rgba(4,10,16,0.85)'
+  roundRectPath((LW - w) / 2, 174, w, 12, 3); ctx.fill()
+  ctx.strokeStyle = 'rgba(90,203,255,0.35)'; ctx.lineWidth = 0.5
+  roundRectPath((LW - w) / 2, 174, w, 12, 3); ctx.stroke()
+  drawPixText((LW - pixWidth(txt, 1)) / 2, 178, 1, C_MAIN_LT, txt)
+  ctx.globalAlpha = 1
+}
 function drawHUD(t) {
-  // back: pixel '<' icon in a small pill (no text) — tap to go home
-  drawCapsule(3, 3, 22, 14, '<', C_WHITE)
+  // back: neat square button with pixel '<' icon — tap to go home
+  drawBtn(3, 3, 20, 16, '<', C_WHITE)
   // speed: pixel text top-right (no pill)
   drawPixText(LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT, 'x' + gBpm.toFixed(1))
   // song title (uppercase pixel)
@@ -229,9 +252,11 @@ function drawHUD(t) {
     ctx.lineWidth = 1
     ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2 + 2 * p, 0, Math.PI * 2); ctx.stroke()
   }
-  // vibrator status: pixel text bottom-centre (no pill)
+  // vibrator status: pixel text above the compose button
   const vibTxt = gVibOn ? 'VIB ON' : 'VIB OFF'
-  drawPixText((LW - pixWidth(vibTxt, 1)) / 2, LH - 12, 1, gVibOn ? C_GREEN : C_DIM, vibTxt)
+  drawPixText((LW - pixWidth(vibTxt, 1)) / 2, LH - 28, 1, gVibOn ? C_GREEN : C_DIM, vibTxt)
+  // compose entry (bottom-centre button)
+  drawCapsule((LW - 44) / 2, LH - 15, 44, 13, 'COMPOSE', C_MAIN_LT)
   if (gSt !== 'playing') drawPixText((LW - pixWidth('Tap to play', 1)) / 2, LH / 2 + 40, 1, C_MAIN, 'Tap to play')
 }
 // touch ripple effect (expanding fading ring)
@@ -250,33 +275,34 @@ function drawRipples(t) {
 function drawPlayer(t) { ctx.clearRect(0, 0, LW, LH); drawAurora(t); drawHUD(t); drawRipples(t) }
 // ═══════════ composer (step sequencer) ═══════════
 function enterComposer() {
+  gPrev = (gScr === 'player') ? 'player' : 'idle'
   gScr = 'composer'
   gSeqPlay = false; gSeqStep = 0
   stopAudio()
 }
 function drawComposer(t) {
   ctx.fillStyle = '#04070b'; ctx.fillRect(0, 0, LW, LH)
-  // top controls (pixel text in pills)
-  drawCapsule(3, 3, 44, 14, 'BPM ' + gSeqBpm, '#fff')
-  drawCapsule(LW / 2 - 22, 3, 44, 14, gSeqPlay ? 'STOP' : 'PLAY', '#fff')
-  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CLEAR', '#fff')
-  // grid
-  const gx = 26, gy = 32, cw = (LW - 26) / 8, ch = 22
+  // top: minimal pixel labels (no pills)
+  const playCol = gSeqPlay ? C_GREEN : C_WHITE
+  drawPixText(6, 5, 1, C_MAIN_LT, 'BPM ' + gSeqBpm)
+  drawPixText((LW - pixWidth(gSeqPlay ? 'STOP' : 'PLAY', 1)) / 2, 5, 1, playCol, gSeqPlay ? 'STOP' : 'PLAY')
+  drawPixText(LW - 6 - pixWidth('CLEAR', 1), 5, 1, C_DIM, 'CLEAR')
+  ctx.fillStyle = '#0d2533'; ctx.fillRect(0, 14, LW, 1)
+  // grid: 8×8, roomier & calmer
+  const gx = 12, gy = 20, cell = 14, ch = 25
   for (let r = 0; r < 8; r++) {
-    drawPixText(2, gy + r * ch + 8, 1, '#7d8d99', SEQ_NOTES[r])
+    drawPixText(2, gy + r * ch + 8, 1, '#5a6a76', SEQ_NOTES[r])
     for (let s = 0; s < 8; s++) {
-      const x = gx + s * cw, y = gy + r * ch
+      const x = gx + s * cell, y = gy + r * ch
       const on = gSeq[r][s]
       const isStep = gSeqPlay && s === gSeqStep
       ctx.fillStyle = on ? (isStep ? C_MAIN_LT : C_MAIN) : (isStep ? '#1a4a63' : '#0d1a24')
-      ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2)
-      ctx.strokeStyle = '#16405c'; ctx.lineWidth = 0.5
-      ctx.strokeRect(x + 1, y + 1, cw - 2, ch - 2)
+      ctx.fillRect(x + 1, y + 2, cell - 2, ch - 4)
     }
   }
-  // bottom: back pill (pixel <) + hint
-  drawCapsule(3, LH - 17, 22, 14, '<', '#fff')
-  drawPixText(LW - 4 - pixWidth('TAP GRID TO COMPOSE', 1), LH - 12, 1, C_DIM, 'TAP GRID TO COMPOSE')
+  // bottom: neat back button + hint
+  drawBtn(3, LH - 17, 20, 14, '<', C_WHITE)
+  drawPixText(LW - 4 - pixWidth('TAP GRID', 1), LH - 12, 1, C_DIM, 'TAP GRID')
   drawRipples(t)
 }
 function updateSeq() {
@@ -299,6 +325,7 @@ function render(t) {
   if (gScr === 'idle') drawIdle(t)
   else if (gScr === 'composer') drawComposer(t)
   else drawPlayer(t)
+  drawToast(t)
 }
 
 // ═══════════ engine ═══════════
@@ -421,8 +448,8 @@ Page({
     // ── composer interactions ──
     if (gScr === 'composer') {
       const x = this._x || 0, y = this._y || 0
-      // back (bottom-left)
-      if (y > LH - 17 && x < 42) { haptic('light'); backToIdle(); return }
+      // back (bottom-left) → previous screen
+      if (y > LH - 17 && x < 42) { haptic('light'); if (gPrev === 'player') { gScr = 'player'; gSt = 'stopped' } else backToIdle(); return }
       // top controls
       if (y < 17) {
         if (x < 50) { haptic('light'); gSeqBpm = (gSeqBpm + 20 > 180) ? 100 : gSeqBpm + 20; return }
@@ -437,9 +464,9 @@ Page({
         return
       }
       // grid tap
-      if (y >= 32 && y < 32 + 8 * 22 && x >= 26) {
-        const s = Math.min(7, Math.floor((x - 26) / ((LW - 26) / 8)))
-        const r = Math.min(7, Math.floor((y - 32) / 22))
+      if (y >= 20 && y < 20 + 8 * 25 && x >= 12) {
+        const s = Math.min(7, Math.floor((x - 12) / 14))
+        const r = Math.min(7, Math.floor((y - 20) / 25))
         haptic('light')
         gSeq[r][s] = !gSeq[r][s]
         if (gSeq[r][s]) { playTone(SEQ_SCALE[r], 200); vibe(SEQ_SCALE[r]) }
@@ -458,8 +485,13 @@ Page({
       if (gSt === 'playing') startSong(gSongIdx)
       return
     }
-    // ── vibrator status (bottom-centre pixel text) toggle ──
-    if (gScr === 'player' && (this._y || 0) > LH - 16 && (this._y || 0) < LH - 2 &&
+    // ── compose entry (bottom-centre button) ──
+    if (gScr === 'player' && (this._y || 0) > LH - 18 && (this._y || 0) < LH - 2 &&
+        (this._x || 0) > (LW - 46) / 2 && (this._x || 0) < (LW + 46) / 2) {
+      haptic('medium'); enterComposer(); return
+    }
+    // ── vibrator status (pixel text above the compose button) toggle ──
+    if (gScr === 'player' && (this._y || 0) > LH - 30 && (this._y || 0) < LH - 18 &&
         (this._x || 0) > (LW - 40) / 2 && (this._x || 0) < (LW + 40) / 2) {
       gVibOn = !gVibOn; haptic('medium')
       this.toast(gVibOn ? 'Vib ON' : 'Vib OFF')
@@ -474,8 +506,6 @@ Page({
     }
     this._lastUp = now
     if (gScr === 'idle') {
-      // CREATE entry (top-right) → composer
-      if ((this._x || 0) > LW - 3 - 45 && (this._y || 0) < 17) { haptic('light'); enterComposer(); return }
       // easter egg: tap the logo 5 times → rainbow mode
       if ((this._y || 0) > 55 && (this._y || 0) < 130 && (this._x || 0) > 20 && (this._x || 0) < 115) {
         gLogoHits++; haptic('light')
@@ -497,8 +527,6 @@ Page({
     }
   },
   toast(m) {
-    this.setData({ toast: m })
-    clearTimeout(this._toastT)
-    this._toastT = setTimeout(function () { this.setData({ toast: '' }) }.bind(this), 1400)
+    gToast = { text: m, t0: Date.now() }
   }
 })
