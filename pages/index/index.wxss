@@ -27,10 +27,11 @@
   color: #3a5a70;
   font-size: 11px;
   pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .toast {
   position: fixed;
-  top: 40px;
+  bottom: 26%;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(20, 50, 70, 0.92);
@@ -43,6 +44,7 @@
   pointer-events: none;
   z-index: 9;
   white-space: nowrap;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .toast.show {
   opacity: 1;

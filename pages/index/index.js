@@ -100,6 +100,7 @@ const SEQ_NOTES = ['A3', 'B3', 'C4', 'D4', 'E4', 'F#4', 'G#4', 'A4']
 let gSeq = []
 for (let r = 0; r < 8; r++) gSeq.push(new Array(8).fill(false))
 let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
+let gLogoHits = 0, gRainbow = false   // easter egg
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -125,6 +126,10 @@ function vibe(f) {
   if (!gVibOn || f < 20) return
   const s = 0.65 + Math.min(1, (f - 110) / 740) * 0.35
   wx.vibrateShort({ type: s > 0.75 ? 'heavy' : (s > 0.45 ? 'medium' : 'light') })
+}
+// light tap feedback for every interactive tap (真机触感)
+function haptic(type) {
+  wx.vibrateShort({ type: type || 'light' })
 }
 
 function startSong(idx) {
@@ -182,9 +187,11 @@ function drawAurora(t) {
   const flow = t * 0.004 * gBpm
   const amp = 12 + gPulse * 6
   const breathe = 0.75 + 0.25 * Math.sin(t * 0.003 * gBpm)
+  const rainbowHue = gRainbow ? ((t * 0.05) % 360) : -1
   for (let li = 0; li < 3; li++) {
     const phase = flow + li * 2.1
-    const col = li === 1 ? C_WHITE : C_DIM
+    let col = (li === 1) ? C_WHITE : C_DIM
+    if (rainbowHue >= 0) col = 'hsl(' + ((rainbowHue + li * 45) % 360) + ',85%,62%)'
     ctx.fillStyle = col
     for (let y = 2; y < LH - 2; y += 2) {
       const x = cx + amp * breathe * Math.sin(y * 0.055 + phase)
@@ -196,7 +203,9 @@ function drawAurora(t) {
     const a = i * 0.21 + t * 0.002 * gBpm
     const px = cx + amp * breathe * Math.sin(a * 0.7 + i)
     const py = (i * 4) % LH
-    ctx.fillStyle = (i % 4 === 0) ? C_WHITE : C_MAIN_DK
+    let pcol = (i % 4 === 0) ? C_WHITE : C_MAIN_DK
+    if (rainbowHue >= 0) pcol = 'hsl(' + ((rainbowHue + i * 12) % 360) + ',85%,65%)'
+    ctx.fillStyle = pcol
     ctx.fillRect(px | 0, py, 1, 1)
   }
   ctx.fillStyle = '#18364e'; ctx.fillRect(cx, 4, 1, LH - 8)
@@ -210,8 +219,12 @@ function drawCapsule(cx, cy, w, h, text, color, font) {
   ctx.fillText(text, cx + w / 2, cy + h / 2 + 3); ctx.textAlign = 'left'
 }
 function drawHUD(t) {
-  drawCapsule(3, 3, 24, 12, '‹', '#fff', '600 10px sans-serif')
-  drawCapsule(LW - 3 - 24, 3, 24, 12, 'x' + gBpm.toFixed(1), '#fff', '8px sans-serif')
+  // bigger back button — easy to tap
+  drawCapsule(3, 3, 46, 16, '‹ 返回', '#fff', '600 9px sans-serif')
+  drawCapsule(LW - 3 - 26, 3, 26, 12, 'x' + gBpm.toFixed(1), '#fff', '8px sans-serif')
+  // vibrator status (bottom centre, tappable) — kept low for notches
+  drawCapsule((LW - 48) / 2, LH - 26, 48, 14, gVibOn ? 'VIB ON' : 'VIB OFF',
+              gVibOn ? C_GREEN : C_DIM, '8px sans-serif')
   ctx.fillStyle = gSt === 'playing' ? C_GREEN : C_DIM
   ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2, 0, Math.PI * 2); ctx.fill()
   // breathing halo on the play dot
@@ -401,49 +414,75 @@ Page({
     if (gScr === 'composer') {
       const x = this._x || 0, y = this._y || 0
       // back (bottom-left)
-      if (y > LH - 17 && x < 40) { backToIdle(); return }
+      if (y > LH - 17 && x < 42) { haptic('light'); backToIdle(); return }
       // top controls
       if (y < 17) {
-        if (x < 50) { gSeqBpm = (gSeqBpm + 20 > 180) ? 100 : gSeqBpm + 20; return }
+        if (x < 50) { haptic('light'); gSeqBpm = (gSeqBpm + 20 > 180) ? 100 : gSeqBpm + 20; return }
         if (x > LW / 2 - 25 && x < LW / 2 + 25) {
+          haptic('light')
           gSeqPlay = !gSeqPlay
           if (gSeqPlay) { gSeqStep = 0; gSeqT0 = Date.now(); ensureAudio() }
           else stopAudio()
           return
         }
-        if (x > LW - 45) { for (let r = 0; r < 8; r++) gSeq[r].fill(false); return }
+        if (x > LW - 45) { haptic('light'); for (let r = 0; r < 8; r++) gSeq[r].fill(false); return }
         return
       }
       // grid tap
       if (y >= 32 && y < 32 + 8 * 22 && x >= 26) {
         const s = Math.min(7, Math.floor((x - 26) / ((LW - 26) / 8)))
         const r = Math.min(7, Math.floor((y - 32) / 22))
+        haptic('light')
         gSeq[r][s] = !gSeq[r][s]
         if (gSeq[r][s]) { playTone(SEQ_SCALE[r], 200); vibe(SEQ_SCALE[r]) }
       }
       return
     }
+    // ── player: back button (top-left, big tap target) ──
+    if (gScr === 'player' && (this._x || 0) < 52 && (this._y || 0) < 22) {
+      haptic('light'); backToIdle(); return
+    }
     // swipe → next song
     if (gScr === 'player' && held < 400 && Math.abs(dx) > 25) {
+      haptic('light')
       gSongIdx = (gSongIdx + 1) % SONGS.length
       this.toast('Track → ' + SONGS[gSongIdx].title)
       if (gSt === 'playing') startSong(gSongIdx)
       return
     }
+    // ── vibrator status pill (bottom centre) toggle ──
+    if (gScr === 'player' && (this._y || 0) > LH - 30 && (this._y || 0) < LH - 6 &&
+        (this._x || 0) > (LW - 52) / 2 && (this._x || 0) < (LW + 52) / 2) {
+      gVibOn = !gVibOn; haptic('medium')
+      this.toast(gVibOn ? '震动已开启' : '震动已关闭')
+      return
+    }
     // long press → back to idle
-    if (gScr === 'player' && held > 500) { backToIdle(); return }
+    if (gScr === 'player' && held > 500) { haptic('light'); backToIdle(); return }
     // double tap → toggle vibrator
     if (this._lastUp && now - this._lastUp < 350) {
-      if (gScr === 'player') { gVibOn = !gVibOn; this.toast(gVibOn ? 'Vibrate ON' : 'Vibrate OFF') }
+      if (gScr === 'player') { gVibOn = !gVibOn; haptic('medium'); this.toast(gVibOn ? '震动已开启' : '震动已关闭') }
       this._lastUp = 0; return
     }
     this._lastUp = now
     if (gScr === 'idle') {
       // CREATE entry (top-right) → composer
-      if ((this._x || 0) > LW - 3 - 45 && (this._y || 0) < 17) { enterComposer(); return }
+      if ((this._x || 0) > LW - 3 - 45 && (this._y || 0) < 17) { haptic('light'); enterComposer(); return }
+      // easter egg: tap the logo 5 times → rainbow mode
+      if ((this._y || 0) > 55 && (this._y || 0) < 130 && (this._x || 0) > 20 && (this._x || 0) < 115) {
+        gLogoHits++; haptic('light')
+        if (gLogoHits >= 5) {
+          gLogoHits = 0; gRainbow = true
+          this.toast('🎉 彩蛋！彩虹模式开启')
+        }
+        return
+      }
       gScr = 'player'; gSt = 'stopped'; gSongIdx = 0; gNoteIdx = 0; gBpm = 1.0; gVibOn = true
+      haptic('medium')
+      this.toast('双击屏幕可开关震动')
       initOrientation()
     } else {
+      haptic('light')
       if (gSt === 'stopped') startSong(gSongIdx)
       else if (gSt === 'playing') { gSt = 'paused'; stopAudio() }
       else { gSt = 'playing'; gNoteT0 = Date.now() }
