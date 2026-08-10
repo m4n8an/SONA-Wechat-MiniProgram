@@ -202,7 +202,6 @@ function drawAurora(t) {
     ctx.fillStyle = pcol
     ctx.fillRect(px | 0, py, 1, 1)
   }
-  ctx.fillStyle = '#18364e'; ctx.fillRect(cx, 4, 1, LH - 8)
 }
 function drawCapsule(cx, cy, w, h, text, color) {
   ctx.fillStyle = 'rgba(90,203,255,0.18)'
