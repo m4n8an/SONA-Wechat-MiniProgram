@@ -196,7 +196,7 @@ function drawAurora(t) {
   for (let i = 0; i < 30; i++) {
     const a = i * 0.21 + t * 0.002 * gBpm
     const px = cx + amp * breathe * Math.sin(a * 0.7 + i)
-    const py = (i * 4) % LH
+    const py = ((i * 4 + Math.sin(a * 1.7) * (4 + gPulse * 6)) % LH + LH) % LH
     let pcol = (i % 4 === 0) ? C_WHITE : C_MAIN_DK
     if (rainbowHue >= 0) pcol = 'hsl(' + ((rainbowHue + i * 12) % 360) + ',85%,65%)'
     ctx.fillStyle = pcol
@@ -209,7 +209,7 @@ function drawCapsule(cx, cy, w, h, text, color) {
   roundRectPath(cx, cy, w, h, h / 2); ctx.fill()
   ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
   roundRectPath(cx, cy, w, h, h / 2); ctx.stroke()
-  drawPixText((cx + w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
+  drawPixText(cx + (w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
 }
 // neat square button (small radius) with pixel text — for chrome controls
 function drawBtn(cx, cy, w, h, text, color, active) {
@@ -217,7 +217,7 @@ function drawBtn(cx, cy, w, h, text, color, active) {
   roundRectPath(cx, cy, w, h, 3); ctx.fill()
   ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
   roundRectPath(cx, cy, w, h, 3); ctx.stroke()
-  drawPixText((cx + w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
+  drawPixText(cx + (w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
 }
 // canvas pixel toast — fades in/out under "TAP TO PLAY", no system font
 function drawToast() {
@@ -236,8 +236,8 @@ function drawToast() {
   ctx.globalAlpha = 1
 }
 function drawHUD(t) {
-  // back: neat square button with pixel '<' icon — tap to go home
-  drawBtn(3, 3, 20, 16, '<', C_WHITE)
+  // back: simple pixel '<' arrow, same size as the title — tap to go home
+  drawPixText(3, 4, 1, C_WHITE, '<')
   // speed: pixel text top-right (no pill)
   drawPixText(LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT, 'x' + gBpm.toFixed(1))
   // song title (uppercase pixel)
