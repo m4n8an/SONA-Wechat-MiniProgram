@@ -101,7 +101,7 @@ let gSeq = []
 for (let r = 0; r < 8; r++) gSeq.push(new Array(8).fill(false))
 let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
 let gLogoHits = 0, gRainbow = false   // easter egg
-let gShake = 0   // shake → big particle motion (mirrors firmware)
+let gShake = 0   // shake → wider wave (NaN-safe, mirrors firmware)
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -167,7 +167,7 @@ function drawIdle(t) {
     let lw = 88, lh = lw / ar
     ctx.drawImage(gLogo, (LW - lw) / 2, 96 - lh / 2, lw, lh)
   } else {
-    drawPixText('SONA', (LW - pixWidth('SONA', 4)) / 2, 100 - 10, 4, '#fff')
+    drawPixText((LW - pixWidth('SONA', 4)) / 2, 100 - 10, 4, '#fff', 'SONA')
   }
   const a = 0.5 + 0.5 * Math.sin(t * 0.003)
   ctx.globalAlpha = 0.28 + 0.42 * a
@@ -180,7 +180,7 @@ function drawIdle(t) {
 function drawAurora(t) {
   const cx = LW / 2
   const flow = t * 0.004 * gBpm
-  const amp = 12 + gPulse * 6 + gShake * 20
+  const amp = 12 + gPulse * 6 + gShake * 16
   const breathe = 0.75 + 0.25 * Math.sin(t * 0.003 * gBpm)
   const rainbowHue = gRainbow ? ((t * 0.05) % 360) : -1
   for (let li = 0; li < 3; li++) {
@@ -194,16 +194,14 @@ function drawAurora(t) {
       ctx.fillRect(x | 0, y, 1, 1)
     }
   }
-  const nP = 30 + Math.round(gShake * 50)
-  for (let i = 0; i < nP; i++) {
+  for (let i = 0; i < 30; i++) {
     const a = i * 0.21 + t * 0.002 * gBpm
     const px = cx + amp * breathe * Math.sin(a * 0.7 + i)
     const py = (i * 4) % LH
     let pcol = (i % 4 === 0) ? C_WHITE : C_MAIN_DK
     if (rainbowHue >= 0) pcol = 'hsl(' + ((rainbowHue + i * 12) % 360) + ',85%,65%)'
     ctx.fillStyle = pcol
-    const ps = 1 + Math.round(gShake)
-    ctx.fillRect(px | 0, py, ps, ps)
+    ctx.fillRect(px | 0, py, 1, 1)
   }
   ctx.fillStyle = '#18364e'; ctx.fillRect(cx, 4, 1, LH - 8)
 }
@@ -218,9 +216,9 @@ function drawHUD(t) {
   // back: pixel '<' icon in a small pill (no text) — tap to go home
   drawCapsule(3, 3, 22, 14, '<', C_WHITE)
   // speed: pixel text top-right (no pill)
-  drawPixText('x' + gBpm.toFixed(1), LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT)
+  drawPixText(LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT, 'x' + gBpm.toFixed(1))
   // song title (uppercase pixel)
-  drawPixText(SONGS[gSongIdx].title, (LW - pixWidth(SONGS[gSongIdx].title, 1)) / 2, 3, 1, C_MUTED)
+  drawPixText((LW - pixWidth(SONGS[gSongIdx].title, 1)) / 2, 3, 1, C_MUTED, SONGS[gSongIdx].title)
   // play/pause dot
   ctx.fillStyle = gSt === 'playing' ? C_GREEN : C_DIM
   ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2, 0, Math.PI * 2); ctx.fill()
@@ -233,8 +231,8 @@ function drawHUD(t) {
   }
   // vibrator status: pixel text bottom-centre (no pill)
   const vibTxt = gVibOn ? 'VIB ON' : 'VIB OFF'
-  drawPixText(vibTxt, (LW - pixWidth(vibTxt, 1)) / 2, LH - 12, 1, gVibOn ? C_GREEN : C_DIM)
-  if (gSt !== 'playing') drawPixText('Tap to play', (LW - pixWidth('Tap to play', 1)) / 2, LH / 2 + 40, 1, C_MAIN)
+  drawPixText((LW - pixWidth(vibTxt, 1)) / 2, LH - 12, 1, gVibOn ? C_GREEN : C_DIM, vibTxt)
+  if (gSt !== 'playing') drawPixText((LW - pixWidth('Tap to play', 1)) / 2, LH / 2 + 40, 1, C_MAIN, 'Tap to play')
 }
 // touch ripple effect (expanding fading ring)
 function drawRipples(t) {
@@ -265,7 +263,7 @@ function drawComposer(t) {
   // grid
   const gx = 26, gy = 32, cw = (LW - 26) / 8, ch = 22
   for (let r = 0; r < 8; r++) {
-    drawPixText(SEQ_NOTES[r], 2, gy + r * ch + 8, 1, '#7d8d99')
+    drawPixText(2, gy + r * ch + 8, 1, '#7d8d99', SEQ_NOTES[r])
     for (let s = 0; s < 8; s++) {
       const x = gx + s * cw, y = gy + r * ch
       const on = gSeq[r][s]
@@ -278,7 +276,7 @@ function drawComposer(t) {
   }
   // bottom: back pill (pixel <) + hint
   drawCapsule(3, LH - 17, 22, 14, '<', '#fff')
-  drawPixText('TAP GRID TO COMPOSE', LW - 4 - pixWidth('TAP GRID TO COMPOSE', 1), LH - 12, 1, C_DIM)
+  drawPixText(LW - 4 - pixWidth('TAP GRID TO COMPOSE', 1), LH - 12, 1, C_DIM, 'TAP GRID TO COMPOSE')
   drawRipples(t)
 }
 function updateSeq() {
@@ -357,16 +355,17 @@ function initOrientation() {
     })
   } catch (e) { }
 }
-// shake → big particle/wave motion (mirrors firmware gShake)
+// shake → wider wave (mirrors firmware), NaN-safe so it can never break rendering
 function initShake() {
   try {
     wx.startAccelerometer({ interval: 'game' })
     wx.onAccelerometerChange(function (res) {
+      if (!res || isNaN(res.x) || isNaN(res.y) || isNaN(res.z)) return
       const mag = Math.sqrt(res.x * res.x + res.y * res.y + res.z * res.z)
       let s = Math.abs(mag - 9.8) / 9.8
       if (s < 0.08) s = 0
-      s = Math.min(1, s * 4)
-      gShake += (s - gShake) * 0.35
+      s = Math.min(1, s * 4)   // aggressive gain, clamped 0..1
+      gShake += (s - gShake) * 0.4
       if (gShake < 0.02) gShake = 0
     })
   } catch (e) { }
