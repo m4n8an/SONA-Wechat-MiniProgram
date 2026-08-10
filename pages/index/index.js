@@ -101,6 +101,7 @@ let gSeq = []
 for (let r = 0; r < 8; r++) gSeq.push(new Array(8).fill(false))
 let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
 let gLogoHits = 0, gRainbow = false   // easter egg
+let gShake = 0   // shake → big particle motion (mirrors firmware)
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -166,26 +167,20 @@ function drawIdle(t) {
     let lw = 88, lh = lw / ar
     ctx.drawImage(gLogo, (LW - lw) / 2, 96 - lh / 2, lw, lh)
   } else {
-    ctx.fillStyle = '#fff'; ctx.font = '600 30px sans-serif'; ctx.textAlign = 'center'
-    ctx.fillText('SONA', LW / 2, 100); ctx.textAlign = 'left'
+    drawPixText('SONA', (LW - pixWidth('SONA', 4)) / 2, 100 - 10, 4, '#fff')
   }
   const a = 0.5 + 0.5 * Math.sin(t * 0.003)
   ctx.globalAlpha = 0.28 + 0.42 * a
   drawPixText((LW - pixWidth('Tap to start', 1)) / 2, 210, 1, '#7d8d99', 'Tap to start')
   ctx.globalAlpha = 1
   // create entry (top-right)
-  ctx.fillStyle = 'rgba(90,203,255,0.18)'
-  roundRectPath(LW - 3 - 42, 3, 42, 14, 7); ctx.fill()
-  ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
-  roundRectPath(LW - 3 - 42, 3, 42, 14, 7); ctx.stroke()
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '600 8px sans-serif'
-  ctx.fillText('CREATE', LW - 24, 13); ctx.textAlign = 'left'
+  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CREATE', '#fff')
   drawRipples(t)
 }
 function drawAurora(t) {
   const cx = LW / 2
   const flow = t * 0.004 * gBpm
-  const amp = 12 + gPulse * 6
+  const amp = 12 + gPulse * 6 + gShake * 20
   const breathe = 0.75 + 0.25 * Math.sin(t * 0.003 * gBpm)
   const rainbowHue = gRainbow ? ((t * 0.05) % 360) : -1
   for (let li = 0; li < 3; li++) {
@@ -199,32 +194,34 @@ function drawAurora(t) {
       ctx.fillRect(x | 0, y, 1, 1)
     }
   }
-  for (let i = 0; i < 30; i++) {
+  const nP = 30 + Math.round(gShake * 50)
+  for (let i = 0; i < nP; i++) {
     const a = i * 0.21 + t * 0.002 * gBpm
     const px = cx + amp * breathe * Math.sin(a * 0.7 + i)
     const py = (i * 4) % LH
     let pcol = (i % 4 === 0) ? C_WHITE : C_MAIN_DK
     if (rainbowHue >= 0) pcol = 'hsl(' + ((rainbowHue + i * 12) % 360) + ',85%,65%)'
     ctx.fillStyle = pcol
-    ctx.fillRect(px | 0, py, 1, 1)
+    const ps = 1 + Math.round(gShake)
+    ctx.fillRect(px | 0, py, ps, ps)
   }
   ctx.fillStyle = '#18364e'; ctx.fillRect(cx, 4, 1, LH - 8)
 }
-function drawCapsule(cx, cy, w, h, text, color, font) {
+function drawCapsule(cx, cy, w, h, text, color) {
   ctx.fillStyle = 'rgba(90,203,255,0.18)'
   roundRectPath(cx, cy, w, h, h / 2); ctx.fill()
   ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
   roundRectPath(cx, cy, w, h, h / 2); ctx.stroke()
-  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.font = font
-  ctx.fillText(text, cx + w / 2, cy + h / 2 + 3); ctx.textAlign = 'left'
+  drawPixText((cx + w - pixWidth(text, 1)) / 2, cy + (h - 5) / 2, 1, color, text)
 }
 function drawHUD(t) {
-  // bigger back button — easy to tap
-  drawCapsule(3, 3, 46, 16, '‹ 返回', '#fff', '600 9px sans-serif')
-  drawCapsule(LW - 3 - 26, 3, 26, 12, 'x' + gBpm.toFixed(1), '#fff', '8px sans-serif')
-  // vibrator status (bottom centre, tappable) — kept low for notches
-  drawCapsule((LW - 48) / 2, LH - 26, 48, 14, gVibOn ? 'VIB ON' : 'VIB OFF',
-              gVibOn ? C_GREEN : C_DIM, '8px sans-serif')
+  // back: pixel '<' icon in a small pill (no text) — tap to go home
+  drawCapsule(3, 3, 22, 14, '<', C_WHITE)
+  // speed: pixel text top-right (no pill)
+  drawPixText('x' + gBpm.toFixed(1), LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT)
+  // song title (uppercase pixel)
+  drawPixText(SONGS[gSongIdx].title, (LW - pixWidth(SONGS[gSongIdx].title, 1)) / 2, 3, 1, C_MUTED)
+  // play/pause dot
   ctx.fillStyle = gSt === 'playing' ? C_GREEN : C_DIM
   ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2, 0, Math.PI * 2); ctx.fill()
   // breathing halo on the play dot
@@ -234,10 +231,10 @@ function drawHUD(t) {
     ctx.lineWidth = 1
     ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2 + 2 * p, 0, Math.PI * 2); ctx.stroke()
   }
-  ctx.textAlign = 'center'; ctx.fillStyle = C_MUTED; ctx.font = '8px sans-serif'
-  ctx.fillText(SONGS[gSongIdx].title.toUpperCase(), LW / 2, 11)
-  if (gSt !== 'playing') drawPixText((LW - pixWidth('Tap to play', 1)) / 2, LH / 2 + 40, 1, C_MAIN, 'Tap to play')
-  ctx.textAlign = 'left'
+  // vibrator status: pixel text bottom-centre (no pill)
+  const vibTxt = gVibOn ? 'VIB ON' : 'VIB OFF'
+  drawPixText(vibTxt, (LW - pixWidth(vibTxt, 1)) / 2, LH - 12, 1, gVibOn ? C_GREEN : C_DIM)
+  if (gSt !== 'playing') drawPixText('Tap to play', (LW - pixWidth('Tap to play', 1)) / 2, LH / 2 + 40, 1, C_MAIN)
 }
 // touch ripple effect (expanding fading ring)
 function drawRipples(t) {
@@ -261,15 +258,14 @@ function enterComposer() {
 }
 function drawComposer(t) {
   ctx.fillStyle = '#04070b'; ctx.fillRect(0, 0, LW, LH)
-  // top controls
-  drawCapsule(3, 3, 44, 14, 'BPM ' + gSeqBpm, '#fff', '8px sans-serif')
-  drawCapsule(LW / 2 - 22, 3, 44, 14, gSeqPlay ? 'STOP' : 'PLAY', '#fff', '8px sans-serif')
-  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CLEAR', '#fff', '8px sans-serif')
+  // top controls (pixel text in pills)
+  drawCapsule(3, 3, 44, 14, 'BPM ' + gSeqBpm, '#fff')
+  drawCapsule(LW / 2 - 22, 3, 44, 14, gSeqPlay ? 'STOP' : 'PLAY', '#fff')
+  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CLEAR', '#fff')
   // grid
   const gx = 26, gy = 32, cw = (LW - 26) / 8, ch = 22
   for (let r = 0; r < 8; r++) {
-    ctx.fillStyle = '#7d8d99'; ctx.font = '8px sans-serif'
-    ctx.fillText(SEQ_NOTES[r], 2, gy + r * ch + 14)
+    drawPixText(SEQ_NOTES[r], 2, gy + r * ch + 8, 1, '#7d8d99')
     for (let s = 0; s < 8; s++) {
       const x = gx + s * cw, y = gy + r * ch
       const on = gSeq[r][s]
@@ -280,11 +276,9 @@ function drawComposer(t) {
       ctx.strokeRect(x + 1, y + 1, cw - 2, ch - 2)
     }
   }
-  // bottom: back + hint
-  drawCapsule(3, LH - 17, 34, 14, '<', '#fff', '600 10px sans-serif')
-  ctx.fillStyle = C_DIM; ctx.font = '8px sans-serif'; ctx.textAlign = 'right'
-  ctx.fillText('TAP GRID TO COMPOSE', LW - 4, LH - 6)
-  ctx.textAlign = 'left'
+  // bottom: back pill (pixel <) + hint
+  drawCapsule(3, LH - 17, 22, 14, '<', '#fff')
+  drawPixText('TAP GRID TO COMPOSE', LW - 4 - pixWidth('TAP GRID TO COMPOSE', 1), LH - 12, 1, C_DIM)
   drawRipples(t)
 }
 function updateSeq() {
@@ -363,6 +357,20 @@ function initOrientation() {
     })
   } catch (e) { }
 }
+// shake → big particle/wave motion (mirrors firmware gShake)
+function initShake() {
+  try {
+    wx.startAccelerometer({ interval: 'game' })
+    wx.onAccelerometerChange(function (res) {
+      const mag = Math.sqrt(res.x * res.x + res.y * res.y + res.z * res.z)
+      let s = Math.abs(mag - 9.8) / 9.8
+      if (s < 0.08) s = 0
+      s = Math.min(1, s * 4)
+      gShake += (s - gShake) * 0.35
+      if (gShake < 0.02) gShake = 0
+    })
+  } catch (e) { }
+}
 
 Page({
   data: { canvasW: 270, canvasH: 480, toast: '' },
@@ -380,6 +388,7 @@ Page({
     this._ch = ch
     // enable share (top-right ··· menu) — growth hook for personal devs
     try { wx.showShareMenu({ withShareTicket: true }) } catch (e) { }
+    initShake()
     initCanvas()
   },
   onShareAppMessage() {
@@ -450,18 +459,18 @@ Page({
       if (gSt === 'playing') startSong(gSongIdx)
       return
     }
-    // ── vibrator status pill (bottom centre) toggle ──
-    if (gScr === 'player' && (this._y || 0) > LH - 30 && (this._y || 0) < LH - 6 &&
-        (this._x || 0) > (LW - 52) / 2 && (this._x || 0) < (LW + 52) / 2) {
+    // ── vibrator status (bottom-centre pixel text) toggle ──
+    if (gScr === 'player' && (this._y || 0) > LH - 16 && (this._y || 0) < LH - 2 &&
+        (this._x || 0) > (LW - 40) / 2 && (this._x || 0) < (LW + 40) / 2) {
       gVibOn = !gVibOn; haptic('medium')
-      this.toast(gVibOn ? '震动已开启' : '震动已关闭')
+      this.toast(gVibOn ? 'Vib ON' : 'Vib OFF')
       return
     }
     // long press → back to idle
     if (gScr === 'player' && held > 500) { haptic('light'); backToIdle(); return }
     // double tap → toggle vibrator
     if (this._lastUp && now - this._lastUp < 350) {
-      if (gScr === 'player') { gVibOn = !gVibOn; haptic('medium'); this.toast(gVibOn ? '震动已开启' : '震动已关闭') }
+      if (gScr === 'player') { gVibOn = !gVibOn; haptic('medium'); this.toast(gVibOn ? 'Vib ON' : 'Vib OFF') }
       this._lastUp = 0; return
     }
     this._lastUp = now
@@ -473,13 +482,13 @@ Page({
         gLogoHits++; haptic('light')
         if (gLogoHits >= 5) {
           gLogoHits = 0; gRainbow = true
-          this.toast('🎉 彩蛋！彩虹模式开启')
+          this.toast('Rainbow mode ON!')
         }
         return
       }
       gScr = 'player'; gSt = 'stopped'; gSongIdx = 0; gNoteIdx = 0; gBpm = 1.0; gVibOn = true
       haptic('medium')
-      this.toast('双击屏幕可开关震动')
+      this.toast('Double-tap to toggle vib')
       initOrientation()
     } else {
       haptic('light')
