@@ -28,7 +28,7 @@ const PIX = {
   '6': '111100111101111', '7': '111001010010010', '8': '111101111101111',
   '9': '111101111001111',
   '.': '000000000000010', ':': '000010000010000', 'x': '000101010101000',
-  '<': '000010111010000', ' ': '000000000000000'
+  '<': '010110100110010', ' ': '000000000000000'
 }
 function pixWidth(txt, s) { return String(txt).length * 4 * s }
 function drawPixText(x, y, s, color, txt) {
@@ -236,12 +236,12 @@ function drawToast() {
   ctx.globalAlpha = 1
 }
 function drawHUD(t) {
-  // back: simple pixel '<' arrow, same size as the title — tap to go home
+  // back: simple pixel '<' arrow, same size/row as the title — tap to go home
   drawPixText(3, 4, 1, C_WHITE, '<')
   // speed: pixel text top-right (no pill)
   drawPixText(LW - 3 - pixWidth('x' + gBpm.toFixed(1), 1), 4, 1, C_MAIN_LT, 'x' + gBpm.toFixed(1))
-  // song title (uppercase pixel)
-  drawPixText((LW - pixWidth(SONGS[gSongIdx].title, 1)) / 2, 3, 1, C_MUTED, SONGS[gSongIdx].title)
+  // song title (uppercase pixel) — same row as back + speed
+  drawPixText((LW - pixWidth(SONGS[gSongIdx].title, 1)) / 2, 4, 1, C_MUTED, SONGS[gSongIdx].title)
   // play/pause dot
   ctx.fillStyle = gSt === 'playing' ? C_GREEN : C_DIM
   ctx.beginPath(); ctx.arc(LW - 7, LH - 8, 2, 0, Math.PI * 2); ctx.fill()
