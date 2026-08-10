@@ -94,6 +94,12 @@ let gScr = 'idle', gSt = 'stopped', gSongIdx = 0, gNoteIdx = 0,
     gTranspose = 0, gBpm = 1.0, gVibOn = true, gNoteT0 = 0
 let cv = null, ctx = null, gLogo = null, gLogoOk = false, actx = null
 let gRipples = [], gPulse = 0   // fx: touch ripples + note pulse
+// ── composer (8-step × 8-note step sequencer) ──
+const SEQ_SCALE = [A3, B3, Cs4, D4, E4, Fs4, Gs4, A4]   // A minor
+const SEQ_NOTES = ['A3', 'B3', 'C4', 'D4', 'E4', 'F#4', 'G#4', 'A4']
+let gSeq = []
+for (let r = 0; r < 8; r++) gSeq.push(new Array(8).fill(false))
+let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -162,6 +168,13 @@ function drawIdle(t) {
   ctx.globalAlpha = 0.28 + 0.42 * a
   drawPixText((LW - pixWidth('Tap to start', 1)) / 2, 210, 1, '#7d8d99', 'Tap to start')
   ctx.globalAlpha = 1
+  // create entry (top-right)
+  ctx.fillStyle = 'rgba(90,203,255,0.18)'
+  roundRectPath(LW - 3 - 42, 3, 42, 14, 7); ctx.fill()
+  ctx.strokeStyle = C_MAIN; ctx.lineWidth = 1
+  roundRectPath(LW - 3 - 42, 3, 42, 14, 7); ctx.stroke()
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '600 8px sans-serif'
+  ctx.fillText('CREATE', LW - 24, 13); ctx.textAlign = 'left'
   drawRipples(t)
 }
 function drawAurora(t) {
@@ -227,7 +240,61 @@ function drawRipples(t) {
   }
 }
 function drawPlayer(t) { ctx.clearRect(0, 0, LW, LH); drawAurora(t); drawHUD(t); drawRipples(t) }
-function render(t) { if (gScr === 'idle') drawIdle(t); else drawPlayer(t) }
+// ═══════════ composer (step sequencer) ═══════════
+function enterComposer() {
+  gScr = 'composer'
+  gSeqPlay = false; gSeqStep = 0
+  stopAudio()
+}
+function drawComposer(t) {
+  ctx.fillStyle = '#04070b'; ctx.fillRect(0, 0, LW, LH)
+  // top controls
+  drawCapsule(3, 3, 44, 14, 'BPM ' + gSeqBpm, '#fff', '8px sans-serif')
+  drawCapsule(LW / 2 - 22, 3, 44, 14, gSeqPlay ? 'STOP' : 'PLAY', '#fff', '8px sans-serif')
+  drawCapsule(LW - 3 - 42, 3, 42, 14, 'CLEAR', '#fff', '8px sans-serif')
+  // grid
+  const gx = 26, gy = 32, cw = (LW - 26) / 8, ch = 22
+  for (let r = 0; r < 8; r++) {
+    ctx.fillStyle = '#7d8d99'; ctx.font = '8px sans-serif'
+    ctx.fillText(SEQ_NOTES[r], 2, gy + r * ch + 14)
+    for (let s = 0; s < 8; s++) {
+      const x = gx + s * cw, y = gy + r * ch
+      const on = gSeq[r][s]
+      const isStep = gSeqPlay && s === gSeqStep
+      ctx.fillStyle = on ? (isStep ? C_MAIN_LT : C_MAIN) : (isStep ? '#1a4a63' : '#0d1a24')
+      ctx.fillRect(x + 1, y + 1, cw - 2, ch - 2)
+      ctx.strokeStyle = '#16405c'; ctx.lineWidth = 0.5
+      ctx.strokeRect(x + 1, y + 1, cw - 2, ch - 2)
+    }
+  }
+  // bottom: back + hint
+  drawCapsule(3, LH - 17, 34, 14, '<', '#fff', '600 10px sans-serif')
+  ctx.fillStyle = C_DIM; ctx.font = '8px sans-serif'; ctx.textAlign = 'right'
+  ctx.fillText('TAP GRID TO COMPOSE', LW - 4, LH - 6)
+  ctx.textAlign = 'left'
+  drawRipples(t)
+}
+function updateSeq() {
+  if (!gSeqPlay) return
+  const stepDur = 60000 / (gSeqBpm * 2)
+  const now = Date.now()
+  if (now - gSeqT0 >= stepDur) {
+    gSeqStep = (gSeqStep + 1) % 8
+    gSeqT0 = now
+    for (let r = 0; r < 8; r++) {
+      if (gSeq[r][gSeqStep]) {
+        playTone(SEQ_SCALE[r], stepDur * 0.9)
+        vibe(SEQ_SCALE[r])
+        gPulse = 1
+      }
+    }
+  }
+}
+function render(t) {
+  if (gScr === 'idle') drawIdle(t)
+  else if (gScr === 'composer') drawComposer(t)
+  else drawPlayer(t)
+}
 
 // ═══════════ engine ═══════════
 function engine() {
@@ -246,6 +313,7 @@ function engine() {
 }
 function loop(t) {
   engine()
+  if (gScr === 'composer') updateSeq()
   if (gPulse > 0.01) gPulse *= 0.88
   render(t || 0)
   if (cv) cv.requestAnimationFrame(loop)
@@ -303,9 +371,11 @@ Page({
   },
   onShareAppMessage() {
     // share card copy adapts to current screen
-    const title = gScr === 'player'
-      ? 'SONA™ · ' + SONGS[gSongIdx].title + ' 正在震动，来听听'
-      : 'SONA™ 律动音乐 · 点一下就会震动的歌'
+    const title = gScr === 'composer'
+      ? '我在 SONA™ 创作了一段旋律，来听听'
+      : gScr === 'player'
+        ? 'SONA™ · ' + SONGS[gSongIdx].title + ' 正在震动，来听听'
+        : 'SONA™ 律动音乐 · 点一下就会震动的歌'
     return {
       title: title,
       path: '/pages/index/index',
@@ -327,6 +397,32 @@ Page({
     const end = e.changedTouches && e.changedTouches[0]
     const cw = this._cw || 270
     const dx = (end ? end.x * LW / cw : 0) - (this._x || 0)
+    // ── composer interactions ──
+    if (gScr === 'composer') {
+      const x = this._x || 0, y = this._y || 0
+      // back (bottom-left)
+      if (y > LH - 17 && x < 40) { backToIdle(); return }
+      // top controls
+      if (y < 17) {
+        if (x < 50) { gSeqBpm = (gSeqBpm + 20 > 180) ? 100 : gSeqBpm + 20; return }
+        if (x > LW / 2 - 25 && x < LW / 2 + 25) {
+          gSeqPlay = !gSeqPlay
+          if (gSeqPlay) { gSeqStep = 0; gSeqT0 = Date.now(); ensureAudio() }
+          else stopAudio()
+          return
+        }
+        if (x > LW - 45) { for (let r = 0; r < 8; r++) gSeq[r].fill(false); return }
+        return
+      }
+      // grid tap
+      if (y >= 32 && y < 32 + 8 * 22 && x >= 26) {
+        const s = Math.min(7, Math.floor((x - 26) / ((LW - 26) / 8)))
+        const r = Math.min(7, Math.floor((y - 32) / 22))
+        gSeq[r][s] = !gSeq[r][s]
+        if (gSeq[r][s]) { playTone(SEQ_SCALE[r], 200); vibe(SEQ_SCALE[r]) }
+      }
+      return
+    }
     // swipe → next song
     if (gScr === 'player' && held < 400 && Math.abs(dx) > 25) {
       gSongIdx = (gSongIdx + 1) % SONGS.length
@@ -343,6 +439,8 @@ Page({
     }
     this._lastUp = now
     if (gScr === 'idle') {
+      // CREATE entry (top-right) → composer
+      if ((this._x || 0) > LW - 3 - 45 && (this._y || 0) < 17) { enterComposer(); return }
       gScr = 'player'; gSt = 'stopped'; gSongIdx = 0; gNoteIdx = 0; gBpm = 1.0; gVibOn = true
       initOrientation()
     } else {
