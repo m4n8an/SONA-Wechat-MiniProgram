@@ -1,0 +1,9 @@
+<view class="page">
+  <view class="stage">
+    <canvas type="2d" id="screen" class="screen"
+            style="width:{{canvasW}}px;height:{{canvasH}}px"
+            bindtouchstart="onTouchStart" bindtouchend="onTouchEnd"></canvas>
+  </view>
+  <view class="hint">SONA™ · Tap to interact · Tilt for tempo</view>
+  <view class="toast {{toast ? 'show' : ''}}">{{toast}}</view>
+</view>
