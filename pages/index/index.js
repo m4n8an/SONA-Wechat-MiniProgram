@@ -520,7 +520,7 @@ Page({
       initOrientation()
     } else {
       haptic('light')
-      if (gSt === 'stopped') startSong(gSongIdx)
+      if (gSt === 'stopped') { startSong(gSongIdx); gToast = null }   // start playing → hide the "double-tap" hint
       else if (gSt === 'playing') { gSt = 'paused'; stopAudio() }
       else { gSt = 'playing'; gNoteT0 = Date.now() }
     }
