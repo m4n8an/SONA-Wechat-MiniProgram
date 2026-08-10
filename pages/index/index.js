@@ -297,7 +297,20 @@ Page({
     this.setData({ canvasW: cw, canvasH: ch })
     this._cw = cw
     this._ch = ch
+    // enable share (top-right ··· menu) — growth hook for personal devs
+    try { wx.showShareMenu({ withShareTicket: true }) } catch (e) { }
     initCanvas()
+  },
+  onShareAppMessage() {
+    // share card copy adapts to current screen
+    const title = gScr === 'player'
+      ? 'SONA™ · ' + SONGS[gSongIdx].title + ' 正在震动，来听听'
+      : 'SONA™ 律动音乐 · 点一下就会震动的歌'
+    return {
+      title: title,
+      path: '/pages/index/index',
+      imageUrl: '/images/logo.png'
+    }
   },
   onUnload() { try { if (actx) actx.close() } catch (e) { } },
   onTouchStart(e) {
