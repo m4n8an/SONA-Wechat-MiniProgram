@@ -1,0 +1,10 @@
+{
+  "light": {
+    "--sona-bg": "#eef4f8",
+    "--sona-hint": "#4a6b7d"
+  },
+  "dark": {
+    "--sona-bg": "#04070b",
+    "--sona-hint": "#3a5a70"
+  }
+}

@@ -4,5 +4,4 @@
             style="width:{{canvasW}}px;height:{{canvasH}}px"
             bindtouchstart="onTouchStart" bindtouchend="onTouchEnd"></canvas>
   </view>
-  <view class="hint">SONA™ · Tap to interact · Tilt for tempo</view>
 </view>

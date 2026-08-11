@@ -8,5 +8,7 @@
     "backgroundTextStyle": "dark",
     "disableScroll": true
   },
+  "darkmode": true,
+  "themeLocation": "theme.json",
   "sitemapLocation": "sitemap.json"
 }
