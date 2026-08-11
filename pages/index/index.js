@@ -103,6 +103,9 @@ let gSeqBpm = 120, gSeqPlay = false, gSeqStep = 0, gSeqT0 = 0
 let gLogoHits = 0, gRainbow = false   // easter egg
 let gShake = 0   // shake → wider wave (NaN-safe, mirrors firmware)
 let gToast = null, gPrev = 'idle'   // canvas pixel toast + composer back target
+// ── session (v1: in-memory data collection, NOT persisted) ──
+let gSession = null        // active session while a track is playing
+let currentSession = null  // finished session (memory only)
 
 // ═══════════ audio (WebAudioContext, experimental API) ═══════════
 function ensureAudio() {
@@ -142,7 +145,37 @@ function startSong(idx) {
   const n = SONGS[gSongIdx].data[0]
   if (n.f >= 20) { playTone(n.f, n.d / gBpm); vibe(n.f) }
 }
-function backToIdle() { gSt = 'stopped'; gScr = 'idle'; gBpm = 1.0; stopAudio() }
+function backToIdle() { gSt = 'stopped'; gScr = 'idle'; gBpm = 1.0; stopAudio(); endSession() }
+
+// ═══════════ session (v1: in-memory data collection, no persistence) ═══════════
+function startSession() {
+  gSession = {
+    sessionId: 'ses_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    songId: gSongIdx,
+    songName: SONGS[gSongIdx].title,
+    startTime: Date.now(),
+    initialBpm: gBpm,
+    minBpm: gBpm,
+    maxBpm: gBpm,
+    maxShake: gShake || 0
+  }
+}
+// called every frame while a session is open — keeps min/max bpm + maxShake fresh
+function updateSession() {
+  if (!gSession) return
+  if (gBpm < gSession.minBpm) gSession.minBpm = gBpm
+  if (gBpm > gSession.maxBpm) gSession.maxBpm = gBpm
+  if (gShake > gSession.maxShake) gSession.maxShake = gShake
+}
+// finalize the active session into currentSession (idempotent, memory only)
+function endSession() {
+  if (!gSession) return
+  const end = Date.now()
+  gSession.duration = end - gSession.startTime
+  gSession.createdAt = end
+  currentSession = gSession
+  gSession = null
+}
 
 // ═══════════ draw ═══════════
 function roundRectPath(x, y, w, h, r) {
@@ -278,6 +311,7 @@ function enterComposer() {
   gScr = 'composer'
   gSeqPlay = false; gSeqStep = 0
   stopAudio()
+  endSession()
 }
 function drawComposer(t) {
   ctx.fillStyle = '#04070b'; ctx.fillRect(0, 0, LW, LH)
@@ -345,6 +379,7 @@ function engine() {
 function loop(t) {
   engine()
   if (gScr === 'composer') updateSeq()
+  updateSession()   // track live min/max bpm + maxShake (no-op when no session)
   if (gPulse > 0.01) gPulse *= 0.88
   render(t || 0)
   if (cv) cv.requestAnimationFrame(loop)
@@ -429,7 +464,7 @@ Page({
       imageUrl: '/images/logo.png'
     }
   },
-  onUnload() { try { if (actx) actx.close() } catch (e) { } },
+  onUnload() { try { if (actx) actx.close() } catch (e) { } endSession() },
   onTouchStart(e) {
     const p = e.touches && e.touches[0]; if (!p) return
     const cw = this._cw || 270
@@ -520,7 +555,7 @@ Page({
       initOrientation()
     } else {
       haptic('light')
-      if (gSt === 'stopped') { startSong(gSongIdx); gToast = null }   // start playing → hide the "double-tap" hint
+      if (gSt === 'stopped') { startSong(gSongIdx); startSession(); gToast = null }   // start playing → open session + hide hint
       else if (gSt === 'playing') { gSt = 'paused'; stopAudio() }
       else { gSt = 'playing'; gNoteT0 = Date.now() }
     }
