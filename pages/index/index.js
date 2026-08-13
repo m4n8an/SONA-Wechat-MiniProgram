@@ -851,16 +851,11 @@ Page({
     initCanvas()
   },
   onShareAppMessage() {
-    // share card copy adapts to current screen
-    const title = gScr === 'composer'
-      ? '我在 SONA™ 创作了一段旋律，来听听'
-      : gScr === 'player'
-        ? 'SONA™ · ' + SONGS[gSongIdx].title + ' 正在震动，来听听'
-        : 'SONA™ 律动音乐 · 点一下就会震动的歌'
+    // share card: fixed title + local cover image (assets/share-cover.png, unmodified)
     return {
-      title: title,
+      title: '用声音，唤醒沉默的情绪',
       path: '/pages/index/index',
-      imageUrl: '/images/logo.png'
+      imageUrl: '/assets/share-cover.png'
     }
   },
   onUnload() { try { if (actx) actx.close() } catch (e) { } endSession() },
